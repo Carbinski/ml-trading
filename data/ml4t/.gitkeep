@@ -1,0 +1,3 @@
+# Cached Jackovich homework CSVs live here after:
+#   python -m ml_trading.fetch
+# Tests use tests/fixtures/ml4t/ instead. Do not commit the dump.
