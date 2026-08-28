@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+
+# Cached Jackovich / ML4T homework CSVs (fetch locally; do not commit the dump)
+data/ml4t/**
+!data/ml4t/.gitkeep
+
+.DS_Store
