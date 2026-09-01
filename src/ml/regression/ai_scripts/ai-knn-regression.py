@@ -1,0 +1,331 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+REGRESSION_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REGRESSION_DIR))
+
+import utility as ut
+from src.ml.config import CLEAN_DIR as DATA_DIR, CUTOFF
+
+LAG = 1
+# k=15/21 are the v7 SPY holdout winners; k=51 is the v6 CV ceiling for comparison.
+N_NEIGHBORS_LIST = [15, 21, 51]
+
+FEATURE_SETS = {
+    "v4": [
+        "1_Day_Return",
+        "Overnight",
+        "Range",
+        "Close Location",
+        "Upper Wick",
+        "Lower Wick",
+    ],
+    "v5": [
+        "1_Day_Return",
+        "Overnight",
+        "Range",
+        "Close Location",
+        "Rel_Vol",
+        "20_Day_Return",
+        "Dist_From_SMA",
+    ],
+}
+
+SPLIT_FEATURE_COLS = [
+    "1_Day_Return",
+    "Overnight",
+    "Range",
+    "Close Location",
+    "Upper Wick",
+    "Lower Wick",
+    "Rel_Vol",
+    "Shock_Vol",
+    "5_Day_Return",
+    "10_Day_Return",
+    "20_Day_Return",
+    "Dist_From_SMA",
+]
+
+
+def load_stock_frames(data_dir: Path) -> dict[str, pd.DataFrame]:
+    files = sorted(data_dir.glob("*.csv"))
+    if not files:
+        raise FileNotFoundError(f"No stock CSV files found in {data_dir}")
+    frames: dict[str, pd.DataFrame] = {}
+    for path in files:
+        frame = pd.read_csv(path, parse_dates=["Date"])
+        frames[path.stem] = frame.sort_values("Date").reset_index(drop=True)
+    return frames
+
+
+def train_model(X: pd.DataFrame, y: pd.Series, n_neighbors: int):
+    model = make_pipeline(
+        StandardScaler(),
+        KNeighborsRegressor(n_neighbors=n_neighbors),
+    )
+    model.fit(X, y)
+    return model
+
+
+def split_metrics(
+    y_true: pd.Series | np.ndarray,
+    y_pred: np.ndarray,
+    train_mean: float,
+) -> dict[str, Any]:
+    actual = np.asarray(y_true, dtype=float)
+    predicted = np.asarray(y_pred, dtype=float).ravel()
+    mse = float(mean_squared_error(actual, predicted))
+    mse_mean = float(
+        mean_squared_error(actual, np.full_like(actual, train_mean, dtype=float))
+    )
+    pred_std = float(predicted.std())
+    actual_std = float(actual.std())
+    correlation = (
+        float(np.corrcoef(actual, predicted)[0, 1])
+        if actual_std > 0 and pred_std > 0
+        else None
+    )
+    return {
+        "observations": int(len(actual)),
+        "mse": mse,
+        "r2": float(r2_score(actual, predicted)),
+        "mse_mean_baseline": mse_mean,
+        "beat_mean_baseline": bool(mse < mse_mean),
+        "prediction_std": pred_std,
+        "correlation": correlation,
+        "directional_accuracy": float(
+            np.mean(np.sign(predicted) == np.sign(actual))
+        ),
+    }
+
+
+def run_symbol(symbol: str, raw: pd.DataFrame) -> dict[str, Any]:
+    df, _ = ut.process_OHLCV_all(raw.sort_values("Date").dropna())
+    X_train, y_train, X_test, y_test = ut.split_data(
+        df, SPLIT_FEATURE_COLS, CUTOFF, lag=LAG
+    )
+    train_mean = float(y_train.mean())
+    recipes: dict[str, Any] = {}
+    for recipe, features in FEATURE_SETS.items():
+        cols = ut.lagged_cols(X_train, features)
+        by_k: dict[str, Any] = {}
+        for n_neighbors in N_NEIGHBORS_LIST:
+            model = train_model(X_train[cols], y_train, n_neighbors)
+            y_train_pred = model.predict(X_train[cols])
+            y_test_pred = model.predict(X_test[cols])
+            by_k[str(n_neighbors)] = {
+                "n_neighbors": n_neighbors,
+                "train": split_metrics(y_train, y_train_pred, train_mean),
+                "test": split_metrics(y_test, y_test_pred, train_mean),
+            }
+        recipes[recipe] = {"features": features, "by_k": by_k}
+    return {
+        "symbol": symbol,
+        "n_train": int(len(X_train)),
+        "n_test": int(len(X_test)),
+        "recipes": recipes,
+    }
+
+
+def summarize_k(rows: list[dict[str, Any]], recipe: str, k: int) -> dict[str, Any]:
+    per_symbol = []
+    for row in rows:
+        fit = row["recipes"][recipe]["by_k"][str(k)]
+        train = fit["train"]
+        test = fit["test"]
+        per_symbol.append(
+            {
+                "symbol": row["symbol"],
+                "n_neighbors": k,
+                "n_train": row["n_train"],
+                "n_test": row["n_test"],
+                "train_mse": train["mse"],
+                "train_r2": train["r2"],
+                "test_mse": test["mse"],
+                "test_r2": test["r2"],
+                "test_mse_mean_baseline": test["mse_mean_baseline"],
+                "test_beat_mean_baseline": test["beat_mean_baseline"],
+                "test_correlation": test["correlation"],
+                "test_directional_accuracy": test["directional_accuracy"],
+            }
+        )
+    frame = pd.DataFrame(per_symbol)
+    correlations = frame["test_correlation"].dropna()
+    return {
+        "n_neighbors": k,
+        "stock_count": int(len(frame)),
+        "macro_train_mse": float(frame["train_mse"].mean()),
+        "macro_train_r2": float(frame["train_r2"].mean()),
+        "macro_test_mse": float(frame["test_mse"].mean()),
+        "macro_test_r2": float(frame["test_r2"].mean()),
+        "median_test_r2": float(frame["test_r2"].median()),
+        "stocks_with_positive_test_r2": int((frame["test_r2"] > 0).sum()),
+        "stocks_beating_mean_baseline": int(
+            frame["test_beat_mean_baseline"].sum()
+        ),
+        "macro_test_correlation": (
+            float(correlations.mean()) if len(correlations) else None
+        ),
+        "macro_test_directional_accuracy": float(
+            frame["test_directional_accuracy"].mean()
+        ),
+        "per_symbol": per_symbol,
+    }
+
+
+def compare_to_baseline(
+    candidate: dict[str, Any], baseline: dict[str, Any]
+) -> dict[str, Any]:
+    cand = {row["symbol"]: row for row in candidate["per_symbol"]}
+    base = {row["symbol"]: row for row in baseline["per_symbol"]}
+    better_test = []
+    lower_train_better_test = []
+    for symbol in sorted(cand):
+        c, b = cand[symbol], base[symbol]
+        if c["test_r2"] > b["test_r2"]:
+            better_test.append(symbol)
+            if c["train_r2"] < b["train_r2"]:
+                lower_train_better_test.append(symbol)
+    return {
+        "baseline_k": baseline["n_neighbors"],
+        "candidate_k": candidate["n_neighbors"],
+        "stocks_better_test_r2": better_test,
+        "n_better_test_r2": len(better_test),
+        "stocks_lower_train_r2_and_better_test_r2": lower_train_better_test,
+        "n_lower_train_r2_and_better_test_r2": len(lower_train_better_test),
+        "macro_test_r2_delta": float(
+            candidate["macro_test_r2"] - baseline["macro_test_r2"]
+        ),
+        "macro_train_r2_delta": float(
+            candidate["macro_train_r2"] - baseline["macro_train_r2"]
+        ),
+    }
+
+
+def print_recipe_report(recipe: str, payload: dict[str, Any]) -> None:
+    print(f"\n=== {recipe} features: {payload['features']} ===")
+    by_k = payload["by_k"]
+    k15 = pd.DataFrame(by_k["15"]["per_symbol"]).set_index("symbol")
+    k21 = pd.DataFrame(by_k["21"]["per_symbol"]).set_index("symbol")
+    k51 = pd.DataFrame(by_k["51"]["per_symbol"]).set_index("symbol")
+    table = pd.DataFrame(
+        {
+            "train_r2_15": k15["train_r2"],
+            "test_r2_15": k15["test_r2"],
+            "train_r2_21": k21["train_r2"],
+            "test_r2_21": k21["test_r2"],
+            "train_r2_51": k51["train_r2"],
+            "test_r2_51": k51["test_r2"],
+        }
+    )
+    table["best_test_k"] = table[
+        ["test_r2_15", "test_r2_21", "test_r2_51"]
+    ].idxmax(axis=1).str.replace("test_r2_", "", regex=False)
+    print(table.to_string(float_format=lambda x: f"{x:.4f}"))
+    for k in ("15", "21", "51"):
+        s = by_k[k]
+        print(
+            f"{recipe} k={k}: "
+            f"macro train R2={s['macro_train_r2']:.4f}, "
+            f"macro test R2={s['macro_test_r2']:.4f}, "
+            f"median test R2={s['median_test_r2']:.4f}, "
+            f"positive test R2="
+            f"{s['stocks_with_positive_test_r2']}/{s['stock_count']}, "
+            f"beat train-mean baseline="
+            f"{s['stocks_beating_mean_baseline']}/{s['stock_count']}."
+        )
+    for key in ("k15_vs_k51", "k21_vs_k51"):
+        cmp_ = payload[key]
+        print(
+            f"{recipe} k={cmp_['candidate_k']} vs k={cmp_['baseline_k']}: "
+            f"better test R2="
+            f"{cmp_['n_better_test_r2']}/{by_k['51']['stock_count']} "
+            f"{cmp_['stocks_better_test_r2']}; "
+            f"lower train R2 and better test R2="
+            f"{cmp_['n_lower_train_r2_and_better_test_r2']}/"
+            f"{by_k['51']['stock_count']} "
+            f"{cmp_['stocks_lower_train_r2_and_better_test_r2']}; "
+            f"macro test R2 Δ={cmp_['macro_test_r2_delta']:+.4f}."
+        )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Train per-ticker scaled kNN on every clean-yfinance CSV using "
+            "frozen v4/v5 features and fixed k in {15, 21, 51}."
+        )
+    )
+    parser.add_argument("--data-dir", type=Path, default=DATA_DIR)
+    parser.add_argument("--output", type=Path)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    frames = load_stock_frames(args.data_dir)
+    print(
+        f"Loaded {len(frames)} tickers from {args.data_dir}. "
+        f"Cutoff={CUTOFF}. Lag={LAG}. "
+        f"Fixed k={N_NEIGHBORS_LIST}. "
+        "Feature sets frozen from kNN v4 and v5 (SPY selection)."
+    )
+
+    symbol_rows = []
+    for i, symbol in enumerate(sorted(frames), 1):
+        print(f"[{i}/{len(frames)}] {symbol}")
+        symbol_rows.append(run_symbol(symbol, frames[symbol]))
+
+    recipes: dict[str, Any] = {}
+    for recipe, features in FEATURE_SETS.items():
+        by_k = {
+            str(k): summarize_k(symbol_rows, recipe, k) for k in N_NEIGHBORS_LIST
+        }
+        recipes[recipe] = {
+            "features": features,
+            "by_k": by_k,
+            "k15_vs_k51": compare_to_baseline(by_k["15"], by_k["51"]),
+            "k21_vs_k51": compare_to_baseline(by_k["21"], by_k["51"]),
+        }
+
+    results = {
+        "experiment": "per-ticker kNN fixed k=15/21/51 on frozen v4/v5 features",
+        "script": "src/ml/regression/ai_scripts/ai-knn-regression.py",
+        "data_directory": str(args.data_dir),
+        "stocks": sorted(frames),
+        "stock_count": len(frames),
+        "cutoff": CUTOFF,
+        "lag": LAG,
+        "n_neighbors": N_NEIGHBORS_LIST,
+        "recipes": recipes,
+    }
+
+    for recipe in FEATURE_SETS:
+        print_recipe_report(recipe, results["recipes"][recipe])
+
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(results, indent=2, allow_nan=False) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote full results to {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
