@@ -1,0 +1,3 @@
+# Cached Yahoo Finance CSVs live here after:
+#   python src/data/yfinance_dl_raw.py
+# Do not commit the dump.

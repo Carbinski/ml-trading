@@ -12,4 +12,9 @@ build/
 data/ml4t/**
 !data/ml4t/.gitkeep
 
+# Cached Yahoo Finance CSVs from src/data (download locally; do not commit)
+data/raw-yfinance/**
+data/clean-yfinance/**
+!data/raw-yfinance/.gitkeep
+
 .DS_Store
