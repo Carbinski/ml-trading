@@ -75,11 +75,7 @@ class QLearning:
         gamma: float | None = None,
         epochs: int | None = None,
     ):
-        """
-        Allocate a Q-table of zeros. Rows are discrete state ids. Columns are
-        action ids (BUY, SELL, HOLD). The number of rows is the number of
-        (position, market-bin) pairs you can actually be in.
-        """
+        """Zero Q-table. Each row is one (position, market bin); columns are buy, sell, hold."""
         self.df = df
         self.alpha = float(alpha)
         self.gamma = GAMMA if gamma is None else float(gamma)
