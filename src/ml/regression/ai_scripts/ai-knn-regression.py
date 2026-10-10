@@ -13,12 +13,10 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-REGRESSION_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REGRESSION_DIR))
 
-import utility as ut
+from src.ml import utility as ut
 from src.ml.config import CLEAN_DIR as DATA_DIR, CUTOFF
 
 LAG = 1
@@ -30,15 +28,15 @@ FEATURE_SETS = {
         "1_Day_Return",
         "Overnight",
         "Range",
-        "Close Location",
-        "Upper Wick",
-        "Lower Wick",
+        "Close_Location",
+        "Upper_Wick",
+        "Lower_Wick",
     ],
     "v5": [
         "1_Day_Return",
         "Overnight",
         "Range",
-        "Close Location",
+        "Close_Location",
         "Rel_Vol",
         "20_Day_Return",
         "Dist_From_SMA",
@@ -49,9 +47,9 @@ SPLIT_FEATURE_COLS = [
     "1_Day_Return",
     "Overnight",
     "Range",
-    "Close Location",
-    "Upper Wick",
-    "Lower Wick",
+    "Close_Location",
+    "Upper_Wick",
+    "Lower_Wick",
     "Rel_Vol",
     "Shock_Vol",
     "5_Day_Return",

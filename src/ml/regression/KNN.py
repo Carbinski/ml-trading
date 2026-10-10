@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import sys
 from pathlib import Path
 from itertools import combinations
-import utility as ut
 
 BASE_FEATURE_COLS = [
     "1_Day_Return",
@@ -19,7 +18,7 @@ BASE_FEATURE_COLS = [
 ]
 
 CANDIDATE_GROUPS = {
-    "bar_shape": ["Close Location", "Upper Wick", "Lower Wick"],
+    "bar_shape": ["Close_Location", "Upper_Wick", "Lower_Wick"],
     "volume": ["Rel_Vol", "Shock_Vol"],
     "returns": ["5_Day_Return", "10_Day_Return", "20_Day_Return"],
     "sma": ["Dist_From_SMA"]
@@ -30,6 +29,7 @@ LAG = 1
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from src.ml.config import CLEAN_DIR as DATA_DIR, CUTOFF, STARTING_STOCKS
+from src.ml import utility as ut
 
 def train_model(X: pd.DataFrame, y: pd.Series, n_splits: int = 5, gap: int = 5) -> GridSearchCV:
     
