@@ -15,32 +15,71 @@ BUY = 0
 SELL = 1
 HOLD = 2
 
-EDGES = np.array([0.95, 0.98, 1.02, 1.05])
+# 0.005-wide bins from 0.95 to 1.05. The old 0.98-to-1.02 bin held about 60% of days.
+EDGES = np.round(0.95 + 0.005 * np.arange(21), 3)
 MARKET_BINS = len(EDGES) + 1
 WINDOW = 20
+TRADING_DAYS_PER_YEAR = 252
+ANNUAL_RETAINED = 0.98
+GAMMA = float(ANNUAL_RETAINED ** (1.0 / TRADING_DAYS_PER_YEAR))
+ALPHAS = (0.001, 0.01, 0.05, 0.1, 0.3)
+SEED = 0
+EPOCHS = 1000
 DISPLAY_PLOTS = True
 
 ACTION_NAME = {BUY: "buy", SELL: "sell", HOLD: "hold"}
 POSITION_NAME = {FLAT: "flat", LONG: "long"}
 
 
+def add_price_ratio(df: pd.DataFrame) -> None:
+    lagged = df["Adj Close"].shift(1)
+    rolling_mean = lagged.rolling(window=WINDOW).mean()
+    df["Price_to_SMA_Ratio"] = df["Adj Close"] / rolling_mean
+
+
+def format_edge(value: float) -> str:
+    return f"{value:.3f}"
+
+
+def ratio_label(bin_id: int) -> str:
+    if bin_id <= 0:
+        return f"< {format_edge(EDGES[0])}"
+    if bin_id >= len(EDGES):
+        return f">= {format_edge(EDGES[-1])}"
+    return f"{format_edge(EDGES[bin_id - 1])} to {format_edge(EDGES[bin_id])}"
+
+
+def print_bin_counts(df: pd.DataFrame) -> None:
+    dates = pd.to_datetime(df["Date"]).to_numpy()
+    ratio = df["Price_to_SMA_Ratio"]
+    train = (dates < np.datetime64(CUTOFF)) & ratio.notna().to_numpy()
+    counts = np.bincount(
+        np.digitize(ratio.to_numpy()[train], EDGES), minlength=MARKET_BINS
+    )
+    total = int(train.sum())
+    print(
+        f"gamma={GAMMA:.6f}  "
+        f"value after {TRADING_DAYS_PER_YEAR} trading days={ANNUAL_RETAINED:.2f}"
+    )
+    print(f"Train days={total}  bins={MARKET_BINS}")
+    for bin_id, count in enumerate(counts):
+        print(f"  {bin_id:2d}  {ratio_label(bin_id):22}  {int(count):5d}  {count / total:.1%}")
+
+
 class QLearning:
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df: pd.DataFrame, alpha: float):
         """
         Allocate a Q-table of zeros. Rows are discrete state ids. Columns are
         action ids (BUY, SELL, HOLD). The number of rows is the number of
         (position, market-bin) pairs you can actually be in.
         """
         self.df = df
-        self.alpha = 0.1
-        self.gamma = 0.9
-        self.epochs = 1000
+        self.alpha = float(alpha)
+        self.gamma = GAMMA
+        self.epochs = EPOCHS
         self.exploration_prob = 0.1
         self.q_table = np.zeros((2 * MARKET_BINS, 3))
-
-        lagged = df["Adj Close"].shift(1)
-        rolling_mean = lagged.rolling(window=WINDOW).mean()
-        df["Price_to_SMA_Ratio"] = (df["Adj Close"] / rolling_mean)
+        add_price_ratio(df)
 
     def market_bin(self, t: int):
         if t < WINDOW:
@@ -113,7 +152,8 @@ class QLearning:
     def _dates(self) -> np.ndarray:
         return pd.to_datetime(self.df["Date"]).to_numpy()
 
-    def train(self):
+    def train(self, seed: int = SEED):
+        np.random.seed(seed)
         dates = self._dates()
         cutoff = np.datetime64(CUTOFF)
         train_idx = np.flatnonzero(dates < cutoff)
@@ -212,24 +252,18 @@ class QLearning:
             t = next_t
         return indexes, equities, equity
 
-    def _ratio_label(self, bin_id: int) -> str:
-        if bin_id <= 0:
-            return f"< {EDGES[0]:.2f}"
-        if bin_id >= len(EDGES):
-            return f">= {EDGES[-1]:.2f}"
-        return f"{EDGES[bin_id - 1]:.2f} to {EDGES[bin_id]:.2f}"
-
     def _policy_table(self) -> pd.DataFrame:
         rows = []
         for position in (FLAT, LONG):
-            legal = set(self.legal_actions(position))
+            legal = self.legal_actions(position)
             for bin_id in range(MARKET_BINS):
                 state_id = self.state_id(position, bin_id)
-                greedy = max(legal, key=lambda action: self.q_table[state_id, action])
+                values = [self.q_table[state_id, action] for action in legal]
+                greedy = legal[int(np.argmax(values))]
                 row = {
                     "position": POSITION_NAME[position],
                     "bin": bin_id,
-                    "price / prior SMA": self._ratio_label(bin_id),
+                    "price / prior SMA": ratio_label(bin_id),
                     "policy": ACTION_NAME[greedy],
                 }
                 for action in (BUY, HOLD, SELL):
@@ -242,7 +276,7 @@ class QLearning:
             ["position", "bin", "price / prior SMA", "buy", "hold", "sell", "policy"]
         ]
 
-    def visualize(self, symbol: str) -> None:
+    def visualize(self, symbol: str) -> dict:
         """
         Greedy growth of $1 against the stock, train then test.
         The test walk starts flat, same as evaluate. Prints the greedy policy.
@@ -261,36 +295,76 @@ class QLearning:
         test_policy = test_eq[-1] / test_eq[0] - 1.0
         train_stock = float(prices[last_train] / prices[WINDOW] - 1.0)
         test_stock = float(prices[-1] / prices[first_test] - 1.0)
+        print(f"{symbol} alpha={self.alpha:g}")
         print(self._policy_table().to_string(index=False))
         print(f"Train growth of $1: policy {train_policy:.4f}  stock {train_stock:.4f}")
         print(f"Test growth of $1:  policy {test_policy:.4f}  stock {test_stock:.4f}")
+        return {
+            "alpha": self.alpha,
+            "train_policy": train_policy,
+            "test_policy": test_policy,
+            "train_stock": train_stock,
+            "test_stock": test_stock,
+            "dates": dates[indexes],
+            "policy": policy,
+            "stock": stock,
+            "first_test": dates[first_test],
+            "last": dates[indexes[-1]],
+        }
 
-        if not DISPLAY_PLOTS:
-            return
 
-        fig, ax = plt.subplots(figsize=(12, 5))
-        ax.axvspan(dates[first_test], dates[indexes[-1]], color="0.85", label="test", zorder=0)
-        ax.plot(dates[indexes], stock, label="stock", color="tab:blue")
-        ax.plot(dates[indexes], policy, label="policy", color="tab:orange")
-        ax.axvline(pd.Timestamp(CUTOFF), color="0.4", linestyle="--", linewidth=1)
-        ax.set_title(f"{symbol} Q-learning")
-        ax.set_ylabel("growth of $1")
-        ax.set_xlabel("Date")
-        ax.legend()
-        fig.tight_layout()
-        plt.show()
+def plot_curves(symbol: str, curves: list[dict]) -> None:
+    if not DISPLAY_PLOTS or not curves:
+        return
+    base = curves[0]
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.axvspan(base["first_test"], base["last"], color="0.85", label="test", zorder=0)
+    ax.plot(base["dates"], base["stock"], label="stock", color="tab:blue")
+    for curve in curves:
+        ax.plot(curve["dates"], curve["policy"], label=f"alpha={curve['alpha']:g}")
+    ax.axvline(pd.Timestamp(CUTOFF), color="0.4", linestyle="--", linewidth=1)
+    ax.set_title(f"{symbol} Q-learning")
+    ax.set_ylabel("growth of $1")
+    ax.set_xlabel("Date")
+    ax.legend()
+    fig.tight_layout()
+    plt.show()
 
 
 def main():
     symbol = sys.argv[1] if len(sys.argv) > 1 else "SPY"
     df = pd.read_csv(CLEAN_DIR / f"{symbol}.csv", parse_dates=["Date"])
     df = df.sort_values("Date").dropna().reset_index(drop=True)
+    add_price_ratio(df)
+    print_bin_counts(df)
 
-    agent = QLearning(df)
-    print(f"Training {symbol} for {agent.epochs} epochs, cutoff {CUTOFF}")
-    agent.train()
-    agent.evaluate()
-    agent.visualize(symbol)
+    curves = []
+    rows = []
+    for alpha in ALPHAS:
+        agent = QLearning(df, alpha)
+        print(
+            f"\nTraining {symbol} for {agent.epochs} epochs, "
+            f"alpha={agent.alpha:g}, cutoff {CUTOFF}"
+        )
+        agent.train()
+        agent.evaluate()
+        curve = agent.visualize(symbol)
+        rows.append(
+            {
+                "alpha": curve["alpha"],
+                "train": curve["train_policy"],
+                "test": curve["test_policy"],
+            }
+        )
+        curves.append(curve)
+
+    print(
+        f"\nStock growth of $1: train {curves[0]['train_stock']:.4f}  "
+        f"test {curves[0]['test_stock']:.4f}"
+    )
+    print("Alpha grid")
+    print(pd.DataFrame(rows).to_string(index=False, float_format=lambda value: f"{value:.4f}"))
+    plot_curves(symbol, curves)
 
 
 if __name__ == "__main__":
