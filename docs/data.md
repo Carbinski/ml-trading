@@ -1,6 +1,6 @@
 # Data: Jackovich ML4T CSVs and later Yahoo pulls
 
-## What phase 1 uses (temporary)
+## Course CSVs
 
 The CSVs in
 [JeffreyJackovich/machine-learning-for-trading `.../data`](https://github.com/JeffreyJackovich/machine-learning-for-trading/tree/master/Part%201-manipulating_financial_data_in_python/data)
@@ -46,10 +46,8 @@ Cleaning drops/flags unusable rows (bad dates, duplicate dates, high < low, non-
 
 `time_split(frame, cutoff="2011-01-01")` puts every row with `date < cutoff` in train and `date >= cutoff` in test. No shuffle, no k-fold across time. `assert_no_time_leak` checks `train.index.max() < test.index.min()`.
 
-## Yahoo / yfinance (personal research only)
+## Yahoo / yfinance
 
-**Phase-1 vendor recommendation for live or post-2012 research: Yahoo Finance via `yfinance`, fetched by Carson, cached locally.**
+Experiment runs use a local cache in `data/clean-yfinance`. Scripts in `src/data/` download via `yfinance` (`data/raw-yfinance`, then clean). Both trees are gitignored.
 
-- Carson runs `yfinance` himself on his machine. This repo must **not** pip-install yfinance for data pulls, call Yahoo / `query1.finance.yahoo.com`, or ship a fetch script that executes a Yahoo download (automated collection would violate Yahoo ToS for our bots).
-- Cache locally. Do **not** redistribute Yahoo extracts.
-- Do not buy or integrate Tiingo. Do not scrape logins. No brokerage or order code in this slice.
+Do not commit or redistribute those CSVs.

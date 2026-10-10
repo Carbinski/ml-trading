@@ -1,8 +1,6 @@
 # ml-trading
 
-Personal implementations of Machine Learning for Trading ideas (Georgia Tech / Udacity topics), not a 1:1 curriculum clone.
-
-This first slice is **data in**: cache the temporary ML4T homework CSVs, load a date-aligned panel, clean bars, and split train/test **in time**. Parametric regression, kNN, and the SPY backtest are later work. There is no brokerage or order code here.
+Learning repo: price loaders, chronological splits, and logged ML experiments.
 
 ## Setup
 
@@ -15,13 +13,11 @@ pip install -e ".[dev]"
 pytest
 ```
 
-## Homework data (stale, not a live vendor)
+## Data (stale)
 
-Phase 1 temporarily uses the old course CSVs mirrored at
+Uses the old course CSVs mirrored at
 [JeffreyJackovich/machine-learning-for-trading](https://github.com/JeffreyJackovich/machine-learning-for-trading/tree/master/Part%201-manipulating_financial_data_in_python/data)
 (pinned commit `08763f80649604158040dd1559925b3b90c97d32`).
-
-They include **FAKE1** / **FAKE2**, synthetic `ML4T-*` / `SINE_*` files, and dead tickers. Prices stop in **September 2012**. This is homework residue, not a market data subscription. The full dump is ~170MB and the upstream repo has no license — cache it locally; do not vendor the dump in git. Tests ship a small SPY + FAKE1 + FAKE2 excerpt under `tests/fixtures/ml4t/`.
 
 ```bash
 python -m ml_trading.fetch                       # starter symbols into data/ml4t/
@@ -30,6 +26,12 @@ python -m ml_trading.fetch --all                 # full data folder via GitHub z
 ```
 
 Details (file layout, missing sessions, fetch flags): [docs/data.md](docs/data.md).
+
+## Experiment data
+
+Logged runs use a local Yahoo cache in `data/clean-yfinance` (gitignored). Download scripts are in `src/data/`. Do not commit or redistribute those CSVs.
+
+Experiment log: [docs/ml/index.md](docs/ml/index.md).
 
 ## Loader, cleaning, time split
 
@@ -53,7 +55,3 @@ assert train.index.max() < test.index.min()
 - **Split:** earlier dates → train, later dates → test. Configurable cutoff. No shuffle, no k-fold across time.
 
 `load_panel(...)` is the same alignment with MultiIndex columns `(field, symbol)`.
-
-## Yahoo / yfinance (personal research)
-
-**Phase-1 vendor rec for anything beyond this homework dump: Yahoo via yfinance, for personal research.** Carson fetches that himself, caches it locally, and does not redistribute it. This repository does **not** run yfinance, hit Yahoo Finance, or ship a Yahoo download script — automated collection would violate Yahoo ToS for our bots. Do not add Tiingo. See [docs/data.md](docs/data.md).
