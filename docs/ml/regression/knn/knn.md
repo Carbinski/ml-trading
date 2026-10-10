@@ -31,7 +31,7 @@ Shared across versions: `data/clean-yfinance` 10y, cutoff `2024-09-01`, next-day
 | Calendar / split | dates < `2024-09-01` train, else test |
 | Symbols loaded | all 20 CSVs in `data/clean-yfinance` |
 | Symbols trained | AAPL, AMZN, CAT, GOOG, IBM, JNJ, JPM, KO, LIN, META, MSFT, NEE, NVDA, PG, PLD, SPY, UNH, UNP, V, XOM (one model each, each k) |
-| Features | two frozen lag `_0` sets from SPY v4/v5. v4: `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Upper Wick`, `Lower Wick`. v5: `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` |
+| Features | two frozen lag `_0` sets from SPY v4/v5. v4: `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Upper_Wick`, `Lower_Wick`. v5: `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` |
 | Target | next-day `Adj Close` return: `Adj Close.shift(-1) / Adj Close - 1` |
 | Model | `sklearn.pipeline.Pipeline`: `StandardScaler` + `sklearn.neighbors.KNeighborsRegressor(n_neighbors=k)` |
 | Other | no subset search; no CV; ~1992 train / ~499 test rows per ticker |
@@ -150,7 +150,7 @@ SPY v5 k=15 test R²=0.0341; k=21=0.0328; k=51=0.0100
 | Calendar / split | dates < `2024-09-01` train, else test |
 | Symbols loaded | all `STARTING_STOCKS` (20 names in `src/ml/config.py`) |
 | Symbols trained | SPY |
-| Features | two frozen lag `_0` sets. v4: `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Upper Wick`, `Lower Wick` (6 cols). v5: `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` (7 cols) |
+| Features | two frozen lag `_0` sets. v4: `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Upper_Wick`, `Lower_Wick` (6 cols). v5: `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` (7 cols) |
 | Target | next-day `Adj Close` return: `Adj Close.shift(-1) / Adj Close - 1` |
 | Model | `sklearn.pipeline.Pipeline`: `StandardScaler` + `sklearn.neighbors.KNeighborsRegressor` |
 | Other | no subset search; 1992 train / 499 test rows (split on the full candidate list, then column-subset, same as v4/v5); `DISPLAY_PLOTS` off |
@@ -232,7 +232,7 @@ On SPY, smaller-than-51 k helps only for the v5 columns, and only around 15–21
 | Calendar / split | dates < `2024-09-01` train, else test |
 | Symbols loaded | all 20 CSVs in `data/clean-yfinance` |
 | Symbols trained | AAPL, AMZN, CAT, GOOG, IBM, JNJ, JPM, KO, LIN, META, MSFT, NEE, NVDA, PG, PLD, SPY, UNH, UNP, V, XOM (one model each) |
-| Features | two frozen lag `_0` sets from SPY v4/v5. v4: `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Upper Wick`, `Lower Wick`. v5: `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` |
+| Features | two frozen lag `_0` sets from SPY v4/v5. v4: `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Upper_Wick`, `Lower_Wick`. v5: `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` |
 | Target | next-day `Adj Close` return: `Adj Close.shift(-1) / Adj Close - 1` |
 | Model | `sklearn.pipeline.Pipeline`: `StandardScaler` + `sklearn.neighbors.KNeighborsRegressor` |
 | Other | no subset search; `GridSearchCV` scoring `neg_mean_squared_error` with `TimeSeriesSplit(n_splits=5, gap=5)` on each ticker's train; k grid `{3, 5, 11, 21, 51}`; ~1992 train / ~499 test rows per ticker; `DISPLAY_PLOTS` not used |
@@ -316,7 +316,7 @@ SPY v5 | n_neighbors=51 | train MSE=0.000128612 R²=0.0362391 | test MSE=0.00010
 
 **What changed vs v4:**
 - Feature selection: all `2^9 = 512` subsets of `CANDIDATE_GROUPS` (flattened) plus the three-column base. Still scored on `X_train` only by nested `TimeSeriesSplit` + `GridSearchCV` fold MSE. Ties keep the smaller set (empty-to-full order).
-- Trained columns: dropped `Upper Wick` and `Lower Wick`; added `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA`. Still lag `_0` only (7 cols).
+- Trained columns: dropped `Upper_Wick` and `Lower_Wick`; added `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA`. Still lag `_0` only (7 cols).
 - Data, cutoff, target, scaler, k grid, split-then-subset, and SPY-only train are unchanged.
 
 **Setup**
@@ -327,7 +327,7 @@ SPY v5 | n_neighbors=51 | train MSE=0.000128612 R²=0.0362391 | test MSE=0.00010
 | Calendar / split | dates < `2024-09-01` train, else test |
 | Symbols loaded | all `STARTING_STOCKS` (20 names in `src/ml/config.py`) |
 | Symbols trained | SPY |
-| Features | selected `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` at lag `_0` (7 cols). Winner is trial 176/512: candidates `Close Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` on top of the base |
+| Features | selected `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` at lag `_0` (7 cols). Winner is trial 176/512: candidates `Close_Location`, `Rel_Vol`, `20_Day_Return`, `Dist_From_SMA` on top of the base |
 | Target | next-day `Adj Close` return: `Adj Close.shift(-1) / Adj Close - 1` |
 | Model | `sklearn.pipeline.Pipeline`: `StandardScaler` + `sklearn.neighbors.KNeighborsRegressor` |
 | Other | selection and final fit both use `GridSearchCV` scoring `neg_mean_squared_error` with `TimeSeriesSplit(n_splits=5, gap=5)` on train; best `n_neighbors=51` (grid ceiling); `plot_data` 2x2 (time series, scatter, return histogram, residuals); `DISPLAY_PLOTS=True` |
@@ -338,7 +338,7 @@ Selection fold means (train only):
 
 | Trial | Fold MSE | Fold R² |
 |-------|----------|---------|
-| 176/512 `Close Location`,`Rel_Vol`,`20_Day_Return`,`Dist_From_SMA` (kept) | 0.000156663 | -0.0115 |
+| 176/512 `Close_Location`,`Rel_Vol`,`20_Day_Return`,`Dist_From_SMA` (kept) | 0.000156663 | -0.0115 |
 
 Full 512-line print not stored. Later trials in the terminal tail (432–512) had higher fold MSE than 176.
 
@@ -366,8 +366,8 @@ Train improved. Holdout is essentially flat vs v4. Winner fold R² is still nega
 **Terminal excerpt**
 
 ```
-176/512 | Close Location,Rel_Vol,20_Day_Return,Dist_From_SMA           | MSE=0.000156663  R²=-0.0115
-Selected features: ['1_Day_Return', 'Overnight', 'Range', 'Close Location', 'Rel_Vol', '20_Day_Return', 'Dist_From_SMA']
+176/512 | Close_Location,Rel_Vol,20_Day_Return,Dist_From_SMA           | MSE=0.000156663  R²=-0.0115
+Selected features: ['1_Day_Return', 'Overnight', 'Range', 'Close_Location', 'Rel_Vol', '20_Day_Return', 'Dist_From_SMA']
 Best params: {'kneighborsregressor__n_neighbors': 51}
 MSE: 0.00012861232036723516
 R^2: 0.03623906350661876
@@ -385,7 +385,7 @@ R^2: 0.01001269150711992
 
 **What changed vs v3:**
 - Feature selection: `select_features` on `X_train` only. Base is `1_Day_Return`, `Overnight`, `Range`. Each `CANDIDATE_GROUPS` non-empty subset is scored by mean fold MSE from nested `TimeSeriesSplit` + `GridSearchCV`. A subset is kept only if it beats the running fold MSE.
-- Trained columns: v3's `Rel_Vol` and `Dist_From_SMA` dropped; `Close Location`, `Upper Wick`, `Lower Wick` added. Still lag `_0` only (6 cols).
+- Trained columns: v3's `Rel_Vol` and `Dist_From_SMA` dropped; `Close_Location`, `Upper_Wick`, `Lower_Wick` added. Still lag `_0` only (6 cols).
 - `split_data` is built from base plus all candidate names first, then column-subset after selection. Row drop still follows the longest rolling windows (volume and SMA), including unused candidates.
 - Data, cutoff, target, scaler, k grid, and SPY-only train are unchanged.
 
@@ -397,7 +397,7 @@ R^2: 0.01001269150711992
 | Calendar / split | dates < `2024-09-01` train, else test |
 | Symbols loaded | all `STARTING_STOCKS` (20 names in `src/ml/config.py`) |
 | Symbols trained | SPY |
-| Features | selected `1_Day_Return`, `Overnight`, `Range`, `Close Location`, `Upper Wick`, `Lower Wick` at lag `_0` (6 cols). Candidates also included volume, 5/10/20-day returns, and `Dist_From_SMA`; none of those beat bar-shape fold MSE |
+| Features | selected `1_Day_Return`, `Overnight`, `Range`, `Close_Location`, `Upper_Wick`, `Lower_Wick` at lag `_0` (6 cols). Candidates also included volume, 5/10/20-day returns, and `Dist_From_SMA`; none of those beat bar-shape fold MSE |
 | Target | next-day `Adj Close` return: `Adj Close.shift(-1) / Adj Close - 1` |
 | Model | `sklearn.pipeline.Pipeline`: `StandardScaler` + `sklearn.neighbors.KNeighborsRegressor` |
 | Other | selection and final fit both use `GridSearchCV` scoring `neg_mean_squared_error` with `TimeSeriesSplit(n_splits=5, gap=5)` on train; best `n_neighbors=51` (grid ceiling); `plot_data` 2x2 (time series, scatter, return histogram, residuals); `DISPLAY_PLOTS=True` |
@@ -436,7 +436,7 @@ Test improved and is slightly above a mean predictor. Train got a bit worse. Sel
 **Terminal excerpt**
 
 ```
-Selected features: ['1_Day_Return', 'Overnight', 'Range', 'Close Location', 'Upper Wick', 'Lower Wick']
+Selected features: ['1_Day_Return', 'Overnight', 'Range', 'Close_Location', 'Upper_Wick', 'Lower_Wick']
 Best params: {'kneighborsregressor__n_neighbors': 51}
 MSE: 0.00012994110739807677
 R^2: 0.02628175125544807
@@ -455,7 +455,7 @@ R^2: 0.009511846611423236
 **What changed vs v2:**
 - Feature set: 11 derived columns lagged `_0`..`_4` (55 cols) → `1_Day_Return`, `Overnight`, `Range`, `Rel_Vol`, `Dist_From_SMA` at `_0` only (5 cols).
 - `LAG` 5 → 1. History is encoded once in `1_Day_Return` and `Dist_From_SMA`, not by lagging rolling stats.
-- Added `1_Day_Return`. Dropped bar-shape extras (`Close Location`, wicks), `Shock_Vol`, and 5/10/20-day returns from the trained matrix.
+- Added `1_Day_Return`. Dropped bar-shape extras (`Close_Location`, wicks), `Shock_Vol`, and 5/10/20-day returns from the trained matrix.
 - `process_OHLCV_all` still computes the unused derived columns; `split_data` uses `BASE_FEATURE_COLS`. Volume column renamed `Rel Vol` → `Rel_Vol`.
 - Data, cutoff, target, scaler, k grid, and SPY-only train are unchanged.
 
@@ -526,7 +526,7 @@ R^2: -0.0015094093869603142
 | Calendar / split | dates < `2024-09-01` train, else test |
 | Symbols loaded | all `STARTING_STOCKS` (20 names in `src/ml/config.py`) |
 | Symbols trained | SPY |
-| Features | `Range`, `Close Location`, `Upper Wick`, `Lower Wick`, `Rel Vol`, `Shock Vol`, `Overnight`, `5_Day_Return`, `10_Day_Return`, `20_Day_Return`, `Dist_From_SMA` at lags `_0`..`_4` (55 cols). Built by `ut.process_OHLCV_all`; raw OHLCV not in the trained matrix |
+| Features | `Range`, `Close_Location`, `Upper_Wick`, `Lower_Wick`, `Rel Vol`, `Shock Vol`, `Overnight`, `5_Day_Return`, `10_Day_Return`, `20_Day_Return`, `Dist_From_SMA` at lags `_0`..`_4` (55 cols). Built by `ut.process_OHLCV_all`; raw OHLCV not in the trained matrix |
 | Target | next-day `Adj Close` return: `Adj Close.shift(-1) / Adj Close - 1` |
 | Model | `sklearn.pipeline.Pipeline`: `StandardScaler` + `sklearn.neighbors.KNeighborsRegressor` |
 | Other | `GridSearchCV` scoring `neg_mean_squared_error`; CV `TimeSeriesSplit(n_splits=5, gap=5)` on train; best `n_neighbors=51` (grid ceiling); `plot_data` 2x2 (time series, scatter, return histogram, residuals; recent-return scatter skipped because `Adj Close_0`/`_1` are absent); `DISPLAY_PLOTS=True`; `FEATURE_COLS` unused |
