@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ml-trading"
 version = "0.1.0"
-description = "Personal ML4T-topic implementations (data loader, cleaning, time splits first)."
+description = "Learning repo: price loaders, chronological splits, and logged ML experiments."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
