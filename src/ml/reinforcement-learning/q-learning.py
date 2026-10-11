@@ -67,17 +67,20 @@ def print_bin_counts(df: pd.DataFrame) -> None:
 
 
 class QLearning:
-    def __init__(self, df: pd.DataFrame, alpha: float):
-        """
-        Allocate a Q-table of zeros. Rows are discrete state ids. Columns are
-        action ids (BUY, SELL, HOLD). The number of rows is the number of
-        (position, market-bin) pairs you can actually be in.
-        """
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        alpha: float,
+        exploration_prob: float = 0.1,
+        gamma: float | None = None,
+        epochs: int | None = None,
+    ):
+        """Zero Q-table. Each row is one (position, market bin); columns are buy, sell, hold."""
         self.df = df
         self.alpha = float(alpha)
-        self.gamma = GAMMA
-        self.epochs = EPOCHS
-        self.exploration_prob = 0.1
+        self.gamma = GAMMA if gamma is None else float(gamma)
+        self.epochs = EPOCHS if epochs is None else int(epochs)
+        self.exploration_prob = float(exploration_prob)
         self.q_table = np.zeros((2 * MARKET_BINS, 3))
         add_price_ratio(df)
 
