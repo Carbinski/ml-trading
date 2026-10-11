@@ -125,13 +125,14 @@ def train_from_arrays(agent: q_learning.QLearning, seed: int = SEED) -> None:
     q_table = agent.q_table
     alpha = agent.alpha
     gamma = agent.gamma
-    exploration_probability = agent.exploration_prob
     weight_on_previous_q = 1.0 - alpha
     flat_actions = [q_learning.BUY, q_learning.HOLD]
     long_actions = [q_learning.HOLD, q_learning.SELL]
     bar_count = len(prices)
 
-    for _epoch in range(agent.epochs):
+    for epoch in range(agent.epochs):
+        exploration_probability = agent.exploration_rate(epoch)
+        agent.exploration_prob = exploration_probability
         position = q_learning.FLAT
         bar = q_learning.WINDOW
         if bar > last_train_bar:

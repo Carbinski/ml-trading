@@ -31,6 +31,7 @@ class DynaQ(q_learning.QLearning):
         gamma: float | None = None,
         epochs: int | None = None,
         planning_steps: int | None = None,
+        exploration_end: float | None = None,
     ):
         super().__init__(
             df,
@@ -38,6 +39,7 @@ class DynaQ(q_learning.QLearning):
             exploration_prob=exploration_prob,
             gamma=gamma,
             epochs=epochs,
+            exploration_end=exploration_end,
         )
         self.planning_steps = (PLANNING_STEPS if planning_steps is None else int(planning_steps))
         self.init_model()
@@ -90,6 +92,7 @@ class DynaQ(q_learning.QLearning):
 
         bar_width = 30
         for epoch in range(self.epochs):
+            self.exploration_prob = self.exploration_rate(epoch)
             state_id, position, t = self.get_initial_state()
             if t > last_train:
                 break
@@ -145,6 +148,7 @@ def main():
         print(
             f"\nTraining {symbol} for {agent.epochs} epochs, "
             f"alpha={agent.alpha:g}, planning_steps={agent.planning_steps}, "
+            f"exploration {agent.exploration_start:g} to {min(agent.exploration_end, agent.exploration_start):g}, "
             f"cutoff {CUTOFF}"
         )
         agent.train()
