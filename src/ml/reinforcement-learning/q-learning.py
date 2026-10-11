@@ -155,7 +155,7 @@ class QLearning:
     def _dates(self) -> np.ndarray:
         return pd.to_datetime(self.df["Date"]).to_numpy()
 
-    def train(self, seed: int = SEED):
+    def _initialize_training(self, seed, cutoff):
         np.random.seed(seed)
         dates = self._dates()
         cutoff = np.datetime64(CUTOFF)
@@ -163,6 +163,11 @@ class QLearning:
         if len(train_idx) == 0:
             raise ValueError(f"no bars before {CUTOFF}")
         last_train = int(train_idx[-1])
+
+        return dates, cutoff, train_idx, last_train
+
+    def train(self, seed: int = SEED):
+        dates, cutoff, train_idx, last_train = self._initialize_training(seed, CUTOFF)
 
         bar_width = 30
         for epoch in range(self.epochs):
