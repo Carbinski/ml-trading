@@ -22,9 +22,11 @@ WINDOW = 20
 TRADING_DAYS_PER_YEAR = 252
 ANNUAL_RETAINED = 0.98
 GAMMA = float(ANNUAL_RETAINED ** (1.0 / TRADING_DAYS_PER_YEAR))
-ALPHAS = (0.001, 0.01, 0.05, 0.1, 0.3)
+ALPHAS = (1e-5, 3e-5, 1e-4, 3e-4, 1e-3)
 SEED = 0
 EPOCHS = 1000
+# Training exploration falls from exploration_prob to this floor across epochs.
+EXPLORATION_END = 0.05
 DISPLAY_PLOTS = True
 
 ACTION_NAME = {BUY: "buy", SELL: "sell", HOLD: "hold"}
@@ -74,15 +76,29 @@ class QLearning:
         exploration_prob: float = 0.1,
         gamma: float | None = None,
         epochs: int | None = None,
+        exploration_end: float | None = None,
     ):
         """Zero Q-table. Each row is one (position, market bin); columns are buy, sell, hold."""
         self.df = df
         self.alpha = float(alpha)
         self.gamma = GAMMA if gamma is None else float(gamma)
         self.epochs = EPOCHS if epochs is None else int(epochs)
-        self.exploration_prob = float(exploration_prob)
+        self.exploration_start = float(exploration_prob)
+        self.exploration_end = (
+            EXPLORATION_END if exploration_end is None else float(exploration_end)
+        )
+        self.exploration_prob = self.exploration_start
         self.q_table = np.zeros((2 * MARKET_BINS, 3))
         add_price_ratio(df)
+
+    def exploration_rate(self, epoch: int) -> float:
+        """Linear exploration for this epoch. Epoch 0 is the start; the last epoch is the floor."""
+        start = self.exploration_start
+        end = min(self.exploration_end, start)
+        if self.epochs <= 1:
+            return start
+        progress = epoch / (self.epochs - 1)
+        return start + (end - start) * progress
 
     def market_bin(self, t: int):
         if t < WINDOW:
@@ -155,7 +171,7 @@ class QLearning:
     def _dates(self) -> np.ndarray:
         return pd.to_datetime(self.df["Date"]).to_numpy()
 
-    def train(self, seed: int = SEED):
+    def _initialize_training(self, seed, cutoff):
         np.random.seed(seed)
         dates = self._dates()
         cutoff = np.datetime64(CUTOFF)
@@ -164,8 +180,14 @@ class QLearning:
             raise ValueError(f"no bars before {CUTOFF}")
         last_train = int(train_idx[-1])
 
+        return dates, cutoff, train_idx, last_train
+
+    def train(self, seed: int = SEED):
+        dates, cutoff, train_idx, last_train = self._initialize_training(seed, CUTOFF)
+
         bar_width = 30
         for epoch in range(self.epochs):
+            self.exploration_prob = self.exploration_rate(epoch)
             state_id, position, t = self.get_initial_state()
             if t > last_train:
                 break
@@ -347,7 +369,9 @@ def main():
         agent = QLearning(df, alpha)
         print(
             f"\nTraining {symbol} for {agent.epochs} epochs, "
-            f"alpha={agent.alpha:g}, cutoff {CUTOFF}"
+            f"alpha={agent.alpha:g}, "
+            f"exploration {agent.exploration_start:g} to {min(agent.exploration_end, agent.exploration_start):g}, "
+            f"cutoff {CUTOFF}"
         )
         agent.train()
         agent.evaluate()
