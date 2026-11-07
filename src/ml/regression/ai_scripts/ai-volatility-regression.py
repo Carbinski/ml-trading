@@ -8,8 +8,8 @@ from typing import Any
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from src.ml.regression.parametric_experiment_common import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from src.ml.regression.ai_scripts.parametric_experiment_common import (
     CLEAN_DIR,
     TEST_CUTOFF,
     VAL_CUTOFF,

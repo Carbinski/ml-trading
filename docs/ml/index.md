@@ -11,6 +11,7 @@ Living record of learning algorithms tried in this repo: current status, latest 
 | Decision tree regression | v2 | current | clean-yfinance, 25y SPY | next-day Adj Close return | SPY | train MSE 0.000139, R² 0.047; test MSE 0.000109, R² -0.002; `max_depth=2` | [decision-tree](regression/decision-tree/decision-tree.md) |
 | Kernel SVR | v6 | current | clean-yfinance, 10y daily (SPY 25y) | next-day Adj Close return | all 20 | v4-recipe macro test R² -0.0074, 5/20 positive; v5 -0.0137, 4/20; v5 beats v4 on 7/20 | [svm](regression/svm/svm.md) |
 | Voting regressor | v2 | current | clean-yfinance, 25y SPY | next-day Adj Close return | SPY | train MSE 0.000122, R² 0.158; test MSE 0.000112, R² -0.028 | [voting-regressor](ensemble-learning/voting-regressor.md) |
+| Volatility ridge | v1 | current | clean-yfinance daily, all 20 CSVs | absolute next-day Adj Close return | all 20, pooled | best alpha 117.21022975334793; test micro R² 0.043092, macro R² -0.027700; MSE improvement vs stock means 1.503%; correlation 0.2441; 10/20 beat baseline; 2/20 positive R² | [volatility-ridge](regression/volatility/volatility-ridge.md) |
 
 ## How to read this
 
