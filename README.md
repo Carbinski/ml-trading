@@ -33,6 +33,17 @@ Logged runs use a local Yahoo cache in `data/clean-yfinance` (gitignored). Downl
 
 Experiment log: [docs/ml/index.md](docs/ml/index.md).
 
+## What to work on
+
+Do these in order. Logged signed next-day return models already have holdout R² at or below zero. A deeper model on that same target repeats that result.
+
+1. **SGD logistic, SPY direction.** NumPy log loss. Gradient is `(sigmoid(w·x) - y) x`, with a fixed or decaying step size and L2 as weight decay. Label is the sign of the next-day `Adj Close` return. Features are the stationary columns in `src/ml/regression/ai_scripts/parametric_experiment_common.py`. Cutoff `2024-09-01`. Score accuracy against always-up, and long-or-flat growth of $1 against holding SPY. A scikit-learn `LogisticRegression` fit is a gradient check after the loop has a number.
+2. **Same SGD loop, cross-sectional median.** One row per symbol-day. Label is 1 when that name's next-day return beats the same day's median across `STARTING_STOCKS`. Score the equal-weight basket of names predicted to beat the median against the equal-weight basket of all 20.
+3. **Linear Q-learning.** Replace the price/SMA bin table with those same stationary features. One weight vector per action. The update is the tabular semi-gradient with the feature vector in place of the one-hot state. Train on dates before the cutoff, act greedy on the test window, and score growth of $1 against holding the stock.
+4. **One-hidden-layer net on absolute return.** SGD. Target is the absolute next-day `Adj Close` return. Same split and features as volatility ridge. Beat that run's test micro R² and correlation on a matched window.
+
+The same list is the todo on [docs/ml/index.md](docs/ml/index.md).
+
 ## Loader, cleaning, time split
 
 ```python
